@@ -97,6 +97,7 @@ def create_time_columns(selected_data):
 
     return selected_data
 
+
 def create_user_features(selected_data):
     selected_data = selected_data.withColumn('churn', check_for_churn('page')) \
         .withColumn('downgradeVisit', check_for_downgrade_visit('page')) \
@@ -105,10 +106,54 @@ def create_user_features(selected_data):
         .withColumn('addFriend', check_for_friends('page')) \
         .withColumn('rollAdvert', check_for_adverts('page')) \
         .withColumn('logout', check_for_logout('page')) \
-        .withColumn('paingUser', check_for_logout('level')) \
+        .withColumn('paingUser', check_level('level')) \
         .withColumn('Up', check_thumbsup('page')) \
-        .withColumn('Down', check_thumbsdown('page'))
+        .withColumn('Down', check_thumbsdown('page'))\
+        .withColumn('listeningSongs', song_event(selected_data.page))
+
+    selected_data = selected_data.withColumn('churned', total('churn').over(windowsum))
 
     return selected_data
+
+
+def calculate_total_user_activity(df):
+
+    # mark all instances of users that canceled subscription
+    df = df.withColumn('downgradeVisited', total('downgradeVisit').over(windowsum)) \
+        .withColumn('downgradeSubmitted', total('downgradeSubmit').over(windowsum))
+
+    # calculate total songs listened per user
+    df = df.withColumn('songsListened', total('listeningSongs').over(windowsum))
+    df = df.withColumn('songsAddedToPlaylist', total('addToPlaylist').over(windowsum))
+    df = df.withColumn('friendsAdded', total('addFriend').over(windowsum))
+    df = df.withColumn('rolledAdverts', total('rollAdvert').over(windowsum))
+    df = df.withColumn('logouts', total('logout').over(windowsum))
+    df = df.withColumn('DownVoted', total('Down').over(windowsum))
+    df = df.withColumn('UpVoted', total('Up').over(windowsum))
+
+    return df
+
+
+
+def main():
+    spark = get_new_spark_session()
+
+    user_log = load_data(spark)
+
+    selected_data = clean_data(user_log)
+
+    selected_data = create_time_columns(selected_data)
+
+    selected_data = create_user_features(selected_data)
+
+    # filter out last week of user interactions
+    selected_data_last_week = selected_data \
+        .filter(from_unixtime(selected_data.ts / 1000.0) > selected_data.weekBeforeEndDate)
+    selected_data_before_last_week = selected_data \
+        .filter(from_unixtime(selected_data.ts / 1000.0) < selected_data.weekBeforeEndDate)
+
+
+
+
 
 
