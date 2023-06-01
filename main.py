@@ -42,6 +42,10 @@ windowsum = Window.partitionBy("userId")
 
 
 def get_new_spark_session():
+    """
+    Esteblish spark session
+    :return: spark session
+    """
     # create a Spark session
     spark = SparkSession \
         .builder \
@@ -52,6 +56,11 @@ def get_new_spark_session():
 
 
 def load_data(spark):
+    """
+    Load data to analyze
+    :param spark: existing spark session
+    :return: loaded database
+    """
     # load data
     path = "mini_sparkify_event_data.json"
     user_log = spark.read.json(path)
@@ -60,21 +69,31 @@ def load_data(spark):
 
 
 def clean_data(user_log):
+    """
+    Remove records with emptly or null userID or sessionId
+    :param user_log: user activity database
+    :return: cleaned user activity database
+    """
     # filter out null and empty ids
     user_log = user_log.filter(user_log.userId != "") \
         .filter(user_log.userId.isNotNull()) \
         .filter(user_log.sessionId.isNotNull())
 
     # select particular columns to continue with
-    selected_data = user_log.select(['sessionId', 'userId', 'sessionId', \
-                                     'song', 'artist', 'gender', 'itemInSession', \
-                                     'length', 'level', 'location', 'page', 'status', \
+    selected_data = user_log.select(['sessionId', 'userId', 'sessionId',
+                                     'song', 'artist', 'gender', 'itemInSession',
+                                     'length', 'level', 'location', 'page', 'status',
                                      'ts', 'userAgent'])
 
     return selected_data
 
 
 def create_time_columns(selected_data):
+    """
+    Create data features based on time dimension
+    :param selected_data: cleaned user activity data
+    :return: user activity data enriched with time dependent features
+    """
     selected_data = selected_data.withColumn('year', get_year(selected_data.ts)) \
         .withColumn('month', get_month(selected_data.ts)) \
         .withColumn('day', get_day(selected_data.ts)) \
@@ -99,6 +118,11 @@ def create_time_columns(selected_data):
 
 
 def create_user_features(selected_data):
+    """
+    Enrich user activity data with user features describing user activity
+    :param selected_data: user data
+    :return: Enriched user data
+    """
     selected_data = selected_data.withColumn('churn', check_for_churn('page')) \
         .withColumn('downgradeVisit', check_for_downgrade_visit('page')) \
         .withColumn('downgradeSubmit', check_for_downgrade_submit('page')) \
@@ -117,6 +141,11 @@ def create_user_features(selected_data):
 
 
 def calculate_total_user_activity(df):
+    """
+    Calculate aggregated user activity per user
+    :param df: activity data
+    :return: Data enriched with aggregated acitivty
+    """
     # mark all instances of users that canceled subscription
     df = df.withColumn('downgradeVisited', total('downgradeVisit').over(windowsum)) \
         .withColumn('downgradeSubmitted', total('downgradeSubmit').over(windowsum))
@@ -134,6 +163,11 @@ def calculate_total_user_activity(df):
 
 
 def calculate_days_of_actual_interaction(df):
+    """
+    Calculate daily involvement with the app by user
+    :param df: User data
+    :return: Enriched user data
+    """
     days_interacting_per_user = df.select('userId', 'year', 'month', 'day').dropDuplicates() \
         .groupBy('userId').count().withColumnRenamed('count', 'daysInteracting')
     df = df.join(days_interacting_per_user, 'userId', 'left')
@@ -142,6 +176,11 @@ def calculate_days_of_actual_interaction(df):
 
 
 def calculate_user_activity_per_day(df):
+    """
+    Calculate user activity per day of involvement
+    :param df: User data
+    :return: User data enriched with daily activity
+    """
     # calculate average amount of songs listened per user
     df = df.withColumn('songsListenedPerDay'
                        , df.songsListened / df.daysInteracting)
@@ -172,6 +211,11 @@ def calculate_user_activity_per_day(df):
 
 
 def prepare_data_for_analysis(selected_data_distinct_users):
+    """
+    Peprate user data for the classification analysis, replace nulls with zeros and transform for anlysis
+    :param selected_data_distinct_users: data with distinct user aggregated behaviour
+    :return: Transform user data
+    """
     selected_data_distinct_users = selected_data_distinct_users.fillna(0, subset=['songsListenedPerDay'
                                                                                     , 'DownVotedPerSong'
                                                                                     , 'friendsAddedPerDay'
@@ -201,19 +245,23 @@ def prepare_data_for_analysis(selected_data_distinct_users):
     return data
 
 
-def train_and_evaluate_model(trainData, testData, classifier, evaluator):
+def train_and_evaluate_model(train_data, test_data, classifier, evaluator):
+    """
+    Train model, evaluate its predicton against test data
+    :param train_data: training data set
+    :param test_data: testig data set
+    :param classifier: classifier model
+    :param evaluator: evaluating tool
+    :return: trained model, classification predictions, f1 score
+    """
 
-    model = classifier.fit(trainData)
+    model = classifier.fit(train_data)
 
-    predictions = model.transform(testData)
+    predictions = model.transform(test_data)
 
     f1_score = evaluator.evaluate(predictions)
 
     return model, predictions, f1_score
-
-
-
-
 
 
 def main():
