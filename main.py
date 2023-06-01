@@ -352,8 +352,11 @@ def main():
     # decision tree
     dt_model, dt_predictions, dt_f1_score = train_and_evaluate_model(trainingData, testData, dtr, evaluator)
 
-    print(lr_f1_score)
-    print(dt_f1_score)
+    print('Logistic Regression f1 score: ', lr_f1_score)
+    print('Decision tree f1 score: ', dt_f1_score)
+
+    if __name__ == '__main__':
+        main()
 
 
 
