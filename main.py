@@ -7,9 +7,10 @@ from pyspark.sql.functions import udf
 from pyspark.sql.types import StringType
 from pyspark.sql.types import IntegerType
 from pyspark.sql.types import LongType
-#from pyspark.sql.functions import year, month, dayofmonth, hour
+# from pyspark.sql.functions import year, month, dayofmonth, hour
 from pyspark.sql import Window
-from pyspark.sql.functions import rand, mean, split, explode, max as maximum,min as minimum,datediff,from_unixtime, countDistinct as addupDistinct, sum as total, date_add
+from pyspark.sql.functions import rand, mean, split, explode, max as maximum, min as minimum, datediff, from_unixtime, \
+    countDistinct as addupDistinct, sum as total, date_add
 
 import datetime as dt
 
@@ -17,7 +18,6 @@ from pyspark.ml.classification import LogisticRegression, DecisionTreeClassifier
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
-
 
 # create timestamp udfs
 get_hour = udf(lambda x: dt.datetime.fromtimestamp(x / 1000.0).hour)
@@ -68,7 +68,7 @@ def clean_data(user_log):
     # select particular columns to continue with
     selected_data = user_log.select(['sessionId', 'userId', 'sessionId', \
                                      'song', 'artist', 'gender', 'itemInSession', \
-                                     'length', 'level', 'location', 'page', 'status',\
+                                     'length', 'level', 'location', 'page', 'status', \
                                      'ts', 'userAgent'])
 
     return selected_data
@@ -81,7 +81,7 @@ def create_time_columns(selected_data):
         .withColumn('hour', get_hour(selected_data.ts))
 
     # calculate start and end time for each user in the database
-    selected_data = selected_data\
+    selected_data = selected_data \
         .withColumn('endDate', from_unixtime(maximum(selected_data.ts / 1000.0).over(windowsum))) \
         .withColumn('startDate', from_unixtime(minimum(selected_data.ts / 1000.0).over(windowsum)))
 
@@ -106,9 +106,9 @@ def create_user_features(selected_data):
         .withColumn('addFriend', check_for_friends('page')) \
         .withColumn('rollAdvert', check_for_adverts('page')) \
         .withColumn('logout', check_for_logout('page')) \
-        .withColumn('paingUser', check_level('level')) \
+        .withColumn('payingUser', check_level('level')) \
         .withColumn('Up', check_thumbsup('page')) \
-        .withColumn('Down', check_thumbsdown('page'))\
+        .withColumn('Down', check_thumbsdown('page')) \
         .withColumn('listeningSongs', song_event(selected_data.page))
 
     selected_data = selected_data.withColumn('churned', total('churn').over(windowsum))
@@ -117,7 +117,6 @@ def create_user_features(selected_data):
 
 
 def calculate_total_user_activity(df):
-
     # mark all instances of users that canceled subscription
     df = df.withColumn('downgradeVisited', total('downgradeVisit').over(windowsum)) \
         .withColumn('downgradeSubmitted', total('downgradeSubmit').over(windowsum))
@@ -132,6 +131,88 @@ def calculate_total_user_activity(df):
     df = df.withColumn('UpVoted', total('Up').over(windowsum))
 
     return df
+
+
+def calculate_days_of_actual_interaction(df):
+    days_interacting_per_user = df.select('userId', 'year', 'month', 'day').dropDuplicates() \
+        .groupBy('userId').count().withColumnRenamed('count', 'daysInteracting')
+    df = df.join(days_interacting_per_user, 'userId', 'left')
+
+    return df
+
+
+def calculate_user_activity_per_day(df):
+    # calculate average amount of songs listened per user
+    df = df.withColumn('songsListenedPerDay'
+                       , df.songsListened / df.daysInteracting)
+    # calculate average amount of songs listened per user
+    df = df.withColumn('songsAddedToPlaylistPerDay'
+                       , df.songsAddedToPlaylist / df.daysInteracting)
+    # calculate average amount of songs listened per user
+    df = df.withColumn('friendsAddedPerDay'
+                       , df.friendsAdded / df.daysInteracting)
+    # calculate average amount of songs listened per user
+    df = df.withColumn('rolledAdvertsPerDay'
+                       , df.rolledAdverts / df.daysInteracting)
+    # calculate average amount of songs listened per user
+    df = df.withColumn('logoutsPerDay'
+                       , df.logouts / df.daysInteracting)
+    df = df.withColumn('upVotedPerDay'
+                       , df.UpVoted / df.daysInteracting)
+    df = df.withColumn('DownVotedPerDay'
+                       , df.DownVoted / df.daysInteracting)
+    df = df.withColumn('DownVotedPerSong'
+                       , df.DownVoted / df.songsListened)
+    df = df.withColumn('UpVotedPerSong'
+                       , df.UpVoted / df.songsListened)
+    df = df.withColumn('rolledAdvertsPerSong'
+                       , df.rolledAdverts / df.songsListened)
+
+    return df
+
+
+def prepare_data_for_analysis(selected_data_distinct_users):
+    selected_data_distinct_users = selected_data_distinct_users.fillna(0, subset=['songsListenedPerDay'
+                                                                                    , 'DownVotedPerSong'
+                                                                                    , 'friendsAddedPerDay'
+                                                                                    , 'intensityOfInteraction'
+                                                                                    , 'playlistActivityChange'
+                                                                                    , 'listeningActivityChange'])
+
+    data = selected_data_distinct_users.select(['churned'
+                                                   , 'songsListenedPerDay'
+                                                   , 'DownVotedPerSong'
+                                                   , 'friendsAddedPerDay'
+                                                   , 'intensityOfInteraction'
+                                                   , 'playlistActivityChange'
+                                                   , 'listeningActivityChange']).withColumnRenamed('churned', 'label')
+
+    assembler = VectorAssembler(inputCols=["songsListenedPerDay"
+                                            , "DownVotedPerSong"
+                                            , 'friendsAddedPerDay'
+                                            , 'intensityOfInteraction'
+                                            , 'playlistActivityChange'
+                                            , 'listeningActivityChange'], outputCol="features")
+
+    data = assembler.transform(data)
+
+    data = data.select(['label', 'features'])
+
+    return data
+
+
+def train_and_evaluate_model(trainData, testData, classifier, evaluator):
+
+    model = classifier.fit(trainData)
+
+    predictions = model.transform(testData)
+
+    f1_score = evaluator.evaluate(predictions)
+
+    return model, predictions, f1_score
+
+
+
 
 
 
@@ -151,6 +232,82 @@ def main():
         .filter(from_unixtime(selected_data.ts / 1000.0) > selected_data.weekBeforeEndDate)
     selected_data_before_last_week = selected_data \
         .filter(from_unixtime(selected_data.ts / 1000.0) < selected_data.weekBeforeEndDate)
+
+    selected_data = calculate_total_user_activity(selected_data)
+    selected_data_last_week = calculate_total_user_activity(selected_data_last_week)
+    selected_data_before_last_week = calculate_total_user_activity(selected_data_before_last_week)
+
+    selected_data = calculate_days_of_actual_interaction(selected_data)
+    selected_data_last_week = calculate_days_of_actual_interaction(selected_data_last_week)
+    selected_data_before_last_week = calculate_days_of_actual_interaction(selected_data_before_last_week)
+
+    selected_data = calculate_user_activity_per_day(selected_data)
+    selected_data_last_week = calculate_user_activity_per_day(selected_data_last_week)
+    selected_data_before_last_week = calculate_user_activity_per_day(selected_data_before_last_week)
+
+    selected_data = selected_data.withColumn('intensityOfInteraction',
+                                             selected_data.daysInteracting / selected_data.durationDays * 100) \
+        .fillna(0, subset=['intensityOfInteraction'])
+
+    # keep only distinct user calculations
+    selected_data_last_week = selected_data_last_week.select(
+        ['userId', 'songsListenedPerDay', 'songsAddedToPlaylistPerDay']).dropDuplicates()
+    selected_data_before_last_week = selected_data_before_last_week.select(
+        ['userId', 'songsListenedPerDay', 'songsAddedToPlaylistPerDay']).dropDuplicates()
+
+    selected_data_last_week = selected_data_last_week \
+        .withColumnRenamed('songsAddedToPlaylistPerDay', 'songsAddedToPlaylistPerDayLastWeek') \
+        .withColumnRenamed('songsListenedPerDay', 'songsListenedPerDayLastWeek')
+
+    selected_data_before_last_week = selected_data_before_last_week \
+        .withColumnRenamed('songsAddedToPlaylistPerDay', 'songsAddedToPlaylistPerDayBeforeLastWeek') \
+        .withColumnRenamed('songsListenedPerDay', 'songsListenedPerDayBeforeLastWeek')
+
+    selected_data = selected_data.join(selected_data_last_week
+                                       .select(['userId', 'songsAddedToPlaylistPerDayLastWeek'
+                                                   , 'songsListenedPerDayLastWeek']), 'userId', 'left')
+
+    selected_data = selected_data.join(selected_data_before_last_week
+                                       .select(['userId', 'songsAddedToPlaylistPerDayBeforeLastWeek'
+                                                   , 'songsListenedPerDayBeforeLastWeek']), 'userId', 'left')
+
+    selected_data = selected_data.withColumn('playlistActivityChange',
+                                             selected_data.songsAddedToPlaylistPerDayLastWeek /
+                                             selected_data.songsAddedToPlaylistPerDayBeforeLastWeek) \
+        .withColumn('listeningActivityChange',
+                    selected_data.songsListenedPerDayLastWeek / selected_data.songsListenedPerDayBeforeLastWeek)
+
+    selected_data_distinct_users = selected_data.select(['userId'
+                                                            , 'churned'
+                                                            , 'songsListenedPerDay'
+                                                            , 'DownVotedPerSong'
+                                                            , 'friendsAddedPerDay'
+                                                            , 'intensityOfInteraction'
+                                                            , 'playlistActivityChange'
+                                                            , 'listeningActivityChange']).dropDuplicates()
+
+    data = prepare_data_for_analysis(selected_data_distinct_users)
+
+    # Split data into training and testing sets
+    trainingData, testData = data.randomSplit([0.7, 0.3], seed=12345)
+
+    # instanciate the linear regression model
+    lr = LogisticRegression(maxIter=5, regParam=0.0)
+    dtr = DecisionTreeClassifier(labelCol="label", featuresCol="features")
+
+    # Evaluate the predictions using F1 score
+    evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="f1")
+
+    # logistic regression
+    lr_model, lr_predictions, lr_f1_score = train_and_evaluate_model(trainingData, testData, lr, evaluator)
+
+    # decision tree
+    dt_model, dt_predictions, dt_f1_score = train_and_evaluate_model(trainingData, testData, dtr, evaluator)
+
+    print(lr_f1_score)
+    print(dt_f1_score)
+
+
 
 
 
