@@ -269,7 +269,129 @@ def train_and_evaluate_model(train_data, test_data, classifier, evaluator):
     return model, predictions, f1_score
 
 
+def display_comparative_statistics(selected_data, selected_data_last_week, selected_data_before_last_week):
+    """
+    Display comparative statistics for chunred and remaining users
+    :param selected_data: overall dataset
+    :param selected_data_last_week: dataset for weekly activity for one week prior to the end of the sample
+    :param selected_data_before_last_week: dataset for weekly activity for 2 weeks before the end of the sample
+    """
+    # print sample averages for selected variables
+    selected_data_last_week.select(['userId', 'churned', 'songsListenedPerDay'
+                                       , 'songsAddedToPlaylistPerDay'
+                                       , 'friendsAddedPerDay'
+                                       , 'rolledAdvertsPerDay'
+                                       , 'logoutsPerDay'
+                                       , 'upVotedPerDay'
+                                       , 'DownVotedPerDay'
+                                       , 'DownVotedPerSong'
+                                       , 'UpVotedPerSong'
+                                       , 'rolledAdvertsPerSong']) \
+        .dropDuplicates() \
+        .groupBy('churned') \
+        .avg('songsListenedPerDay'
+             , 'songsAddedToPlaylistPerDay'
+             , 'friendsAddedPerDay'
+             , 'rolledAdvertsPerDay').show()
+
+    selected_data_before_last_week.select(['userId', 'churned', 'songsListenedPerDay'
+                                              , 'songsAddedToPlaylistPerDay'
+                                              , 'friendsAddedPerDay'
+                                              , 'rolledAdvertsPerDay'
+                                              , 'logoutsPerDay'
+                                              , 'upVotedPerDay'
+                                              , 'DownVotedPerDay'
+                                              , 'DownVotedPerSong'
+                                              , 'UpVotedPerSong'
+                                              , 'rolledAdvertsPerSong']) \
+        .dropDuplicates() \
+        .groupBy('churned') \
+        .avg('songsListenedPerDay'
+             , 'songsAddedToPlaylistPerDay'
+             , 'friendsAddedPerDay'
+             , 'rolledAdvertsPerDay').show()
+
+    # print averages for the last week of the sample
+    selected_data_last_week.select(['userId', 'churned', 'songsListenedPerDay'
+                                       , 'songsAddedToPlaylistPerDay'
+                                       , 'friendsAddedPerDay'
+                                       , 'rolledAdvertsPerDay'
+                                       , 'logoutsPerDay'
+                                       , 'upVotedPerDay'
+                                       , 'DownVotedPerDay'
+                                       , 'DownVotedPerSong'
+                                       , 'UpVotedPerSong'
+                                       , 'rolledAdvertsPerSong']) \
+        .dropDuplicates() \
+        .groupBy('churned') \
+        .avg('songsListenedPerDay'
+             , 'songsAddedToPlaylistPerDay'
+             , 'friendsAddedPerDay'
+             , 'rolledAdvertsPerDay').show()
+
+    selected_data_last_week.select(['userId', 'churned', 'songsListenedPerDay'
+                                       , 'songsAddedToPlaylistPerDay'
+                                       , 'friendsAddedPerDay'
+                                       , 'rolledAdvertsPerDay'
+                                       , 'logoutsPerDay'
+                                       , 'upVotedPerDay'
+                                       , 'DownVotedPerDay'
+                                       , 'DownVotedPerSong'
+                                       , 'UpVotedPerSong'
+                                       , 'rolledAdvertsPerSong']) \
+        .dropDuplicates() \
+        .groupBy('churned') \
+        .avg('logoutsPerDay'
+             , 'DownVotedPerSong'
+             , 'UpVotedPerSong'
+             , 'rolledAdvertsPerSong').show()
+
+    # print data for averages two weeks before the end of the sample
+    selected_data_before_last_week.select(['userId', 'churned', 'songsListenedPerDay'
+                                              , 'songsAddedToPlaylistPerDay'
+                                              , 'friendsAddedPerDay'
+                                              , 'rolledAdvertsPerDay'
+                                              , 'logoutsPerDay'
+                                              , 'upVotedPerDay'
+                                              , 'DownVotedPerDay'
+                                              , 'DownVotedPerSong'
+                                              , 'UpVotedPerSong'
+                                              , 'rolledAdvertsPerSong']) \
+        .dropDuplicates() \
+        .groupBy('churned') \
+        .avg('songsListenedPerDay'
+             , 'songsAddedToPlaylistPerDay'
+             , 'friendsAddedPerDay'
+             , 'rolledAdvertsPerDay').show()
+
+    selected_data_before_last_week.select(['userId', 'churned', 'songsListenedPerDay'
+                                              , 'songsAddedToPlaylistPerDay'
+                                              , 'friendsAddedPerDay'
+                                              , 'rolledAdvertsPerDay'
+                                              , 'logoutsPerDay'
+                                              , 'upVotedPerDay'
+                                              , 'DownVotedPerDay'
+                                              , 'DownVotedPerSong'
+                                              , 'UpVotedPerSong'
+                                              , 'rolledAdvertsPerSong']) \
+        .dropDuplicates() \
+        .groupBy('churned') \
+        .avg('logoutsPerDay'
+             , 'DownVotedPerSong'
+             , 'UpVotedPerSong'
+             , 'rolledAdvertsPerSong').show()
+
+    # print averaages for intensity of interaction
+    selected_data.select(['userId', 'churned', 'intensityOfInteraction'])\
+        .dropDuplicates() \
+        .groupBy('churned') \
+        .avg('intensityOfInteraction').show()
+
+
 def main():
+    """
+    Main driver to load, clean data, extract user activity features and train classification models
+    """
     spark = get_new_spark_session()
 
     user_log = load_data(spark)
@@ -301,6 +423,8 @@ def main():
     selected_data = selected_data.withColumn('intensityOfInteraction',
                                              selected_data.daysInteracting / selected_data.durationDays * 100) \
         .fillna(0, subset=['intensityOfInteraction'])
+
+    display_comparative_statistics(selected_data, selected_data_last_week, selected_data_before_last_week)
 
     # keep only distinct user calculations
     selected_data_last_week = selected_data_last_week.select(
@@ -342,7 +466,7 @@ def main():
     data = prepare_data_for_analysis(selected_data_distinct_users)
 
     # Split data into training and testing sets
-    trainingData, testData = data.randomSplit([0.7, 0.3], seed=12345)
+    training_data, test_data = data.randomSplit([0.7, 0.3], seed=12345)
 
     # instanciate the linear regression model
     lr = LogisticRegression(maxIter=5, regParam=0.0)
@@ -352,10 +476,10 @@ def main():
     evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="f1")
 
     # logistic regression
-    lr_model, lr_predictions, lr_f1_score = train_and_evaluate_model(trainingData, testData, lr, evaluator)
+    lr_model, lr_predictions, lr_f1_score = train_and_evaluate_model(training_data, test_data, lr, evaluator)
 
     # decision tree
-    dt_model, dt_predictions, dt_f1_score = train_and_evaluate_model(trainingData, testData, dtr, evaluator)
+    dt_model, dt_predictions, dt_f1_score = train_and_evaluate_model(training_data, test_data, dtr, evaluator)
 
     print('Logistic Regression f1 score: ', lr_f1_score)
     print('Decision tree f1 score: ', dt_f1_score)
