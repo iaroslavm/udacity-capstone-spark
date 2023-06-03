@@ -9,7 +9,8 @@ from pyspark.sql.types import IntegerType
 from pyspark.sql.types import LongType
 # from pyspark.sql.functions import year, month, dayofmonth, hour
 from pyspark.sql import Window
-from pyspark.sql.functions import rand, mean, split, explode, max as maximum, min as minimum, datediff, from_unixtime, \
+from pyspark.sql.functions import when, rand, mean, split, explode, max as maximum, min as minimum, datediff, \
+    from_unixtime, \
     countDistinct as addupDistinct, sum as total, date_add
 
 import datetime as dt
@@ -137,6 +138,10 @@ def create_user_features(selected_data):
 
     selected_data = selected_data.withColumn('churned', total('churn').over(windowsum))
 
+    selected_data = selected_data.withColumn('paying_when_churned', when((selected_data.churn == 1)
+                                                                         & (selected_data.payingUser == 1), 1)
+                                             .otherwise(0))
+
     return selected_data
 
 
@@ -217,11 +222,11 @@ def prepare_data_for_analysis(selected_data_distinct_users):
     :return: Transform user data
     """
     selected_data_distinct_users = selected_data_distinct_users.fillna(0, subset=['songsListenedPerDay'
-                                                                                    , 'DownVotedPerSong'
-                                                                                    , 'friendsAddedPerDay'
-                                                                                    , 'intensityOfInteraction'
-                                                                                    , 'playlistActivityChange'
-                                                                                    , 'listeningActivityChange'])
+        , 'DownVotedPerSong'
+        , 'friendsAddedPerDay'
+        , 'intensityOfInteraction'
+        , 'playlistActivityChange'
+        , 'listeningActivityChange'])
 
     data = selected_data_distinct_users.select(['churned'
                                                    , 'songsListenedPerDay'
@@ -232,11 +237,11 @@ def prepare_data_for_analysis(selected_data_distinct_users):
                                                    , 'listeningActivityChange']).withColumnRenamed('churned', 'label')
 
     assembler = VectorAssembler(inputCols=["songsListenedPerDay"
-                                            , "DownVotedPerSong"
-                                            , 'friendsAddedPerDay'
-                                            , 'intensityOfInteraction'
-                                            , 'playlistActivityChange'
-                                            , 'listeningActivityChange'], outputCol="features")
+        , "DownVotedPerSong"
+        , 'friendsAddedPerDay'
+        , 'intensityOfInteraction'
+        , 'playlistActivityChange'
+        , 'listeningActivityChange'], outputCol="features")
 
     data = assembler.transform(data)
 
@@ -357,11 +362,3 @@ def main():
 
     if __name__ == '__main__':
         main()
-
-
-
-
-
-
-
-
