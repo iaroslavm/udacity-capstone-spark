@@ -490,14 +490,27 @@ def main():
     lr = LogisticRegression(maxIter=5, regParam=0.0)
     dtr = DecisionTreeClassifier(labelCol="label", featuresCol="features")
 
+    # Define a grid of decision tree hyperparameters to search over
+    paramGrid = ParamGridBuilder() \
+        .addGrid(dtr.maxDepth, [4, 6]) \
+        .build()
+
     # Evaluate the predictions using F1 score
     evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="f1")
+    # Create a CrossValidator to perform grid search for decision tree
+    cv = CrossValidator(estimator=dtr, estimatorParamMaps=paramGrid, evaluator=evaluator)
 
     # logistic regression
     lr_model, lr_predictions, lr_f1_score = train_and_evaluate_model(training_data, test_data, lr, evaluator)
 
     # decision tree
     dt_model, dt_predictions, dt_f1_score = train_and_evaluate_model(training_data, test_data, dtr, evaluator)
+
+    # select best model from decision tree with greedsearch and calculate its f1 score
+    dt_cvModel = cv.fit(training_data)
+    best_model = dt_cvModel.bestModel
+    best_model_predictions = best_model.transform(test_data)
+    best_model_f1_score = evaluator.evaluate(best_model_predictions)
 
     print('Logistic Regression f1 score: ', lr_f1_score)
     print('Decision tree f1 score: ', dt_f1_score)
