@@ -512,8 +512,16 @@ def main():
     best_model_predictions = best_model.transform(test_data)
     best_model_f1_score = evaluator.evaluate(best_model_predictions)
 
-    print('Logistic Regression f1 score: ', lr_f1_score)
-    print('Decision tree f1 score: ', dt_f1_score)
+    # Create a dictionary with the column names and values
+    scores = {'LR f1 score': [lr_f1_score],
+         'DT default maxDepth of 5': [dt_f1_score],
+         'DT maxDepth of 6': [best_model_f1_score]}
+
+    # Create a DataFrame from the dictionary
+    scores = pd.DataFrame(scores)
+
+# Display the DataFrame
+print(scores)
 
     if __name__ == '__main__':
         main()
