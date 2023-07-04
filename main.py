@@ -20,6 +20,9 @@ from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 
+import matplotlib.pyplot as plt
+import pandas as pd
+
 # create timestamp udfs
 get_hour = udf(lambda x: dt.datetime.fromtimestamp(x / 1000.0).hour)
 get_year = udf(lambda x: dt.datetime.fromtimestamp(x / 1000.0).year)
@@ -388,6 +391,17 @@ def display_comparative_statistics(selected_data, selected_data_last_week, selec
         .avg('intensityOfInteraction').show()
 
 
+def plot_figures(activity_df):
+    """
+    Display figures to illustrate frequency distribution of page column values
+    :param activity_df: pandas dataframe with page frequency to plot
+    """
+    activity_df.plot(x='page',y='count_percentage',kind='bar')
+    plt.show()
+    activity_df[activity_df['page'] != 'NextSong'].plot(x='page',y='count_percentage',kind='bar')
+    plt.show()
+
+
 def main():
     """
     Main driver to load, clean data, extract user activity features and train classification models
@@ -395,6 +409,10 @@ def main():
     spark = get_new_spark_session()
 
     user_log = load_data(spark)
+
+    activity_df = user_log.groupBy('page').count().orderBy(desc('count')).toPandas()
+    activity_df['count_percentage'] = activity_df['count']/activity_df['count'].sum()*100
+    plot_figures(activity_df)
 
     selected_data = clean_data(user_log)
 
@@ -472,8 +490,15 @@ def main():
     lr = LogisticRegression(maxIter=5, regParam=0.0)
     dtr = DecisionTreeClassifier(labelCol="label", featuresCol="features")
 
+    # Define a grid of decision tree hyperparameters to search over
+    paramGrid = ParamGridBuilder() \
+        .addGrid(dtr.maxDepth, [4, 6]) \
+        .build()
+
     # Evaluate the predictions using F1 score
     evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="f1")
+    # Create a CrossValidator to perform grid search for decision tree
+    cv = CrossValidator(estimator=dtr, estimatorParamMaps=paramGrid, evaluator=evaluator)
 
     # logistic regression
     lr_model, lr_predictions, lr_f1_score = train_and_evaluate_model(training_data, test_data, lr, evaluator)
@@ -481,8 +506,22 @@ def main():
     # decision tree
     dt_model, dt_predictions, dt_f1_score = train_and_evaluate_model(training_data, test_data, dtr, evaluator)
 
-    print('Logistic Regression f1 score: ', lr_f1_score)
-    print('Decision tree f1 score: ', dt_f1_score)
+    # select best model from decision tree with greedsearch and calculate its f1 score
+    dt_cvModel = cv.fit(training_data)
+    best_model = dt_cvModel.bestModel
+    best_model_predictions = best_model.transform(test_data)
+    best_model_f1_score = evaluator.evaluate(best_model_predictions)
+
+    # Create a dictionary with the column names and values
+    scores = {'LR f1 score': [lr_f1_score],
+         'DT default maxDepth of 5': [dt_f1_score],
+         'DT maxDepth of 6': [best_model_f1_score]}
+
+    # Create a DataFrame from the dictionary
+    scores = pd.DataFrame(scores)
+
+# Display the DataFrame
+print(scores)
 
     if __name__ == '__main__':
         main()
