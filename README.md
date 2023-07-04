@@ -17,6 +17,7 @@ List of libraries used:
 1. pyspark
 2. matplotlib
 3. pandas
+4. datetime
 
 Description of file in the repository:
 1. Sparkify.ipynb is a jupyter notebook of the project.
