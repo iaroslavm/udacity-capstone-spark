@@ -391,6 +391,17 @@ def display_comparative_statistics(selected_data, selected_data_last_week, selec
         .avg('intensityOfInteraction').show()
 
 
+def plot_figures(activity_df):
+    """
+    Display figures to illustrate frequency distribution of page column values
+    :param activity_df: pandas dataframe with page frequency to plot
+    """
+    activity_df.plot(x='page',y='count_percentage',kind='bar')
+    plt.show()
+    activity_df[activity_df['page'] != 'NextSong'].plot(x='page',y='count_percentage',kind='bar')
+    plt.show()
+
+
 def main():
     """
     Main driver to load, clean data, extract user activity features and train classification models
@@ -398,6 +409,10 @@ def main():
     spark = get_new_spark_session()
 
     user_log = load_data(spark)
+
+    activity_df = user_log.groupBy('page').count().orderBy(desc('count')).toPandas()
+    activity_df['count_percentage'] = activity_df['count']/activity_df['count'].sum()*100
+    plot_figures(activity_df)
 
     selected_data = clean_data(user_log)
 
