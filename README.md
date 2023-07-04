@@ -23,3 +23,7 @@ Description of file in the repository:
 1. Sparkify.ipynb is a jupyter notebook of the project.
 2. main.pu is a python file of the project.
 3. readme.md is a readme file.
+
+Acknowledgements
+
+I am greatefull to Udacity and reviwers in particular for their help during this course and project.
