@@ -20,6 +20,9 @@ from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 
+import matplotlib.pyplot as plt
+import pandas as pd
+
 # create timestamp udfs
 get_hour = udf(lambda x: dt.datetime.fromtimestamp(x / 1000.0).hour)
 get_year = udf(lambda x: dt.datetime.fromtimestamp(x / 1000.0).year)
